@@ -1,24 +1,58 @@
 
-import Base: -, +,*,inv,/
+import Base: -, +,*,inv,/, Callable,(==), isapprox
     
 
-mutable struct ScalarField{T <: Real, TR, TG}
+struct ScalarFieldG{T <: Real, TR, TG}
     basis::PlaneWaveBasis{T, TR}
     order::Int
-    g_data::Union{Vector{TG}, Nothing}
-    r_data::Union{Array{TR, 3}, Nothing}
+    g_data::Vector{TG}
 end
 
+struct ScalarFieldR{T <: Real, TR, TG}
+    basis::PlaneWaveBasis{T, TR}
+    order::Int
+    r_data::Array{TR, 3}
+end
 
+const ScalarField{T, TR, TG} = Union{ScalarFieldR{T, TR, TG}, ScalarFieldG{T, TR, TG}} where {T, TR, TG}
 
-ScalarField(basis::PlaneWaveBasis{T, TR}, order::Int, g_data::Vector{TG}) where {T, TR, TG} = ScalarField{T, TR, TG}(basis, order, g_data, nothing)
+ScalarField(basis::PlaneWaveBasis{T, TR}, order::Int, g_data::Vector{TG}) where {T, TR, TG} = ScalarFieldG{T, TR, TG}(basis, order, g_data)
 
 function ScalarField(basis::PlaneWaveBasis{T, TR}, order::Int, r_data::Array{TR, 3}) where {T, TR}
     TR_, TG = fft_plan_data_types(basis.fft_plan_fw)
     @assert TR_ == TR
-    ScalarField{T, TR, TG}(basis, order, nothing, r_data)
+    ScalarFieldR{T, TR, TG}(basis, order, r_data)
 end
 
+function ==(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG}
+    f.order != g.order && return false
+    f.basis != g.base && return false
+    f.r_data == f.r_data
+end
+
+function ==(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG}
+    f.order != g.order && return false
+    f.basis != g.basis && return false
+    f.g_data == f.g_data
+end
+
+==(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = f == 𝔉(g)
+==(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = 𝔉(f) == g
+
+function isapprox(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}, args...; kwargs...) where {T, TR, TG}
+    f.order != g.order && return false
+    f.basis != g.basis && return false
+    isapprox(f.r_data, f.r_data, args...; kwargs...)
+end
+
+function isapprox(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}, args...; kwargs...) where {T, TR, TG}
+    f.order != g.order && return false
+    f.basis != g.basis && return false
+    isapprox(f.g_data, f.g_data, args...; kwargs...)
+end
+
+isapprox(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}, args...; kwargs...) where {T, TR, TG} = isapprox(f, 𝔉(g), args...; kwargs...)
+isapprox(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}, args...; kwargs...) where {T, TR, TG} = isapprox(𝔉(f), g, args...; kwargs...)
 
 function extract(f::ScalarField{T, TR, TG}, f_fourier::Array{TG, 3}) where {T, TR, TG}
     flattened = reshape(f_fourier, prod(f.basis.G_grid_size))
@@ -27,7 +61,7 @@ function extract(f::ScalarField{T, TR, TG}, f_fourier::Array{TG, 3}) where {T, T
 end
 
 
-function unpack!(f::ScalarField{T, TR, TG}, f_fourier::Array{TG, 3}) where {T, TR, TG}
+function unpack!(f::ScalarFieldG{T, TR, TG}, f_fourier::Array{TG, 3}) where {T, TR, TG}
     fill!(f_fourier, TG(0.0))
     @assert size(f_fourier) == f.basis.G_grid_size
     flattened = reshape(f_fourier, prod(f.basis.G_grid_size))
@@ -35,58 +69,43 @@ function unpack!(f::ScalarField{T, TR, TG}, f_fourier::Array{TG, 3}) where {T, T
     reshape(flattened, f.basis.G_grid_size)
 end
 
-ensure_G_space(f::ScalarField{T, TR, TG}) where {T, TR, TG} = isnothing(f.g_data) && throw(DomainError("ScalarField is already represented in real space"))
-ensure_r_space(f::ScalarField{T, TR, TG}) where {T, TR, TG} = isnothing(f.r_data) && throw(DomainError("ScalarField is already represented in reciprocal space"))
 
-
-function G_to_r!(f::ScalarField{T, TR, TG}, f_fourier::Array{TG, 3}, f_real::Array{TR, 3}; normalize::Bool=true) where {T, TG, TR}
-    ensure_G_space(f)
+function G_to_r!(f::ScalarFieldG{T, TR, TG}, f_fourier::Array{TG, 3}, f_real::Array{TR, 3}; normalize::Bool=true) where {T, TG, TR}
     f_fourier = unpack!(f, f_fourier)
     G_to_r!(f_fourier, f.basis, f_real; normalize=normalize)
-    f.r_data = f_real
-    f.g_data = nothing
-    f
+    ScalarFieldR{T, TR, TG}(f.basis, f.order, f_real)
 end
 
-function G_to_r!(f::ScalarField{T, TR, TG}, f_real::Array{TR, 3}; normalize::Bool=true) where {T, TR, TG}
+function G_to_r!(f::ScalarFieldG{T, TR, TG}, f_real::Array{TR, 3}; normalize::Bool=true) where {T, TR, TG}
     f_fourier = Array{TG, 3}(undef, f.basis.G_grid_size)
     G_to_r!(f, f_fourier, f_real; normalize=normalize)
 end
 
-function G_to_r!(f::ScalarField{T, TR, TG}; normalize::Bool=true) where {T, TR, TG}
+function G_to_r!(f::ScalarFieldG{T, TR, TG}; normalize::Bool=true) where {T, TR, TG}
     f_real = Array{TR, 3}(undef, f.basis.r_grid_size)
     G_to_r!(f, f_real; normalize=normalize)
 end
 
-function G_to_r(f::ScalarField{T, TR, TG}; normalize::Bool=true) where {T, TR, TG}
-    ensure_G_space(f)
+function G_to_r(f::ScalarFieldG{T, TR, TG}; normalize::Bool=true) where {T, TR, TG}
     f_fourier = Array{TG, 3}(undef, f.basis.G_grid_size)
     unpack!(f, f_fourier)
-    ScalarField{T, TR, TG}(f.basis, f.order, nothing, G_to_r(f_fourier, f.basis; normalize=normalize))
+    ScalarFieldR{T, TR, TG}(f.basis, f.order, G_to_r(f_fourier, f.basis; normalize=normalize))
 end
 
-function r_to_G!(f::ScalarField{T, TR, TG}, f_fourier::Array{TG, 3}; normalize::Bool=true) where {T, TG, TR}
-    ensure_r_space(f)
+function r_to_G!(f::ScalarFieldR{T, TR, TG}, f_fourier::Array{TG, 3}; normalize::Bool=true) where {T, TG, TR}
     r_to_G!(f.r_data, f.basis, f_fourier; normalize=normalize)
-    f.g_data = extract(f, f_fourier)
-    f.r_data = nothing
-    f
+    ScalarFieldG{T, TR, TG}(f.basis, f.order, extract(f, f_fourier))
 end
 
-function r_to_G!(f::ScalarField{T, TR, TG}; normalize::Bool=true) where {T, TG, TR}
+function r_to_G!(f::ScalarFieldR{T, TR, TG}; normalize::Bool=true) where {T, TG, TR}
     f_fourier = Array{TG, 3}(undef, f.basis.G_grid_size)
     r_to_G!(f, f_fourier; normalize=normalize)
 end
 
-function r_to_G(f::ScalarField{T, TR, TG}; normalize::Bool=true) where {T, TG, TR}
-    ensure_r_space(f)
-    f_fourier = r_to_G(f.r_data, f.basis; normalize=normalize)
-    ScalarField(f.basis, f.order, extract(f, f_fourier), nothing)
+function r_to_G(f::ScalarFieldR{T, TR, TG}; normalize::Bool=true) where {T, TG, TR}
+    ScalarFieldG{T, TR, TG}(f.basis, f.order, extract(f, r_to_G(f.r_data, f.basis; normalize=normalize)))
 end
 
-
-is_r(f::ScalarField) = !isnothing(f.r_data)
-is_G(f::ScalarField) = !isnothing(f.g_data)
 
 function integrate_rfft_G(spectrum::Array{TG, 3}, n::Union{Nothing, Int}=nothing) where {TG  <: Complex}
     """
@@ -115,20 +134,85 @@ function integrate_rfft_G(spectrum::Array{TG, 3}, n::Union{Nothing, Int}=nothing
     return mean
 end
 
-function integrate_rfft_G(f::ScalarField{T, TR, TG}) where {T, TR, TG  <: Complex}
+function integrate_rfft_G(f::ScalarFieldG{T, TR, TG}) where {T, TR, TG  <: Complex}
     g_grid = Array{TG, 3}(undef, f.basis.G_grid_size)
     unpack!(f, g_grid)
     integrate_rfft_G(g_grid, first(f.basis.r_grid_size))
 end
 
 
-sum_G_square(a::Array{T}) where {T <: Complex} = sum(real(a .* conj(a))) 
+sum_G_square(f::ScalarFieldR{T, TR, TG}) where {T, TR <: Real, TG} = sum(f.r_data .^ 2) / prod(f.basis.r_grid_size) 
+sum_G_square(f::ScalarFieldG{T, TR, TG}) where {T, TR <: Real, TG} = integrate_rfft_G(f)
+sum_G_square(f::ScalarFieldR{T, TR, TG}) where {T, TR <: Complex, TG} = sum(real(f.r_data .* conj(f.r_data))) / prod(f.basis.r_grid_size) 
+sum_G_square(f::ScalarFieldG{T, TR, TG}) where {T, TR <: Complex, TG} = sum(real(f.g_data .* conj(f.g_data)))
 
-sum_G_(a::Array{T}) where {T <: Complex} = sqrt(sum_G_square(a))
 
-integrate(f::ScalarField{T, TR, TG}) where {T, TR <: Real, TG} = isnothing(f.g_data) ? sum(f.r_data .^ 2) / prod(f.basis.r_grid_size) : integrate_rfft_G(f)
-integrate(f::ScalarField{T, TR, TG}) where {T, TR <: Complex, TG} = isnothing(f.g_data) ? sum(real(f.r_data .* conj(f.r_data))) / prod(f.basis.r_grid_size) : sum(real(f.g_data .* conj(f.g_data)))
+integrate(f::ScalarField{T, TR, TG}) where {T, TR, TG} = sqrt(sum_G_square(f))
 
-function add!(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG}
+
+# f̃(𝐆) + g̃(𝐆) → h̃(𝐆) 
+function add_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG}
+    f.order == g.order && return ScalarFieldG{T, TR, TG}(f.basis, f.order, f.g_data .+ g.g_data)
+    s_up, s_down = ((f.order > g.order) ? (f, g) : (g, f))
+    upscale_map = f.basis.G_shell_upscale_maps[s_down.order => s_up.order]
+    g_data_up = copy(s_up.g_data)
+    g_data_up[upscale_map] = g_data_up[upscale_map] .+ s_down.g_data
+    ScalarFieldG{T, TR, TG}(f.basis, max(f.order, g.order), g_data_up)
 end
+
+function add_g(a::Number, f::ScalarFieldG{T, TR, TG}) where {T, TR, TG}
+    G0_index = findfirst((c) -> c ≈ 0.0, f.basis.G_shell_norms[f.order])
+    G0_index === nothing && throw(BoundsError("No constant index"))
+    g_data = copy(f.g_data)
+    g_data[G0_index] += a
+    ScalarFieldG(f.basis, f.order, g_data)
+end
+
+add_g(a::Number, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = add_g(a, 𝔉(g))
+add_g(g::ScalarFieldG{T, TR, TG}, a::Number) where {T, TR, TG} = add_g(a, g)
+add_g(g::ScalarFieldR{T, TR, TG}, a::Number) where {T, TR, TG} = add_g(a, 𝔉(g))
+
+add_g(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = 𝔉(add_r(f, g)) # f(𝐫) + g(𝐫) → h̃(𝐆)
+add_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = add_g(f, 𝔉(g)) # f̃(𝐆) + g(𝐫) → h̃(𝐆)
+add_g(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = add_g(g, f) # f(𝐫) + g̃(𝐆) → h̃(𝐆)
+
+add_r(a::Number, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = ScalarFieldR{T, TR, TG}(g.basis, g.order, g.r_data .+ a)
+add_r(a::Number, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = add_r(a, 𝔉⁻¹(g))
+add_r(g::ScalarFieldR{T, TR, TG}, a::Number) where {T, TR, TG} = add_r(a, g)
+add_r(g::ScalarFieldG{T, TR, TG}, a::Number) where {T, TR, TG} = add_r(a, 𝔉⁻¹(g))
+
+add_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = 𝔉⁻¹(add_g(f, g)) # f̃(𝐆) + g̃(𝐆) → h(𝐫)
+add_r(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = ScalarFieldR{T, TR, TG}(f.basis, max(f.order, g.order), f.r_data .+ g.r_data) # f(𝐫) + g(𝐫) → h(𝐫)
+add_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = add_r(𝔉⁻¹(f), g) # f̃(𝐆) + g(𝐫) → h(𝐫)
+add_r(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = add_r(g, f) # f(𝐫) + g̃(𝐆) → h(𝐫)
+
++(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = add_g(f, g)
++(a::Number, g::ScalarField{T, TR, TG}) where {T, TR, TG} = add_g(a, g)
++(g::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = add_g(a, g)
+(+ᵣ) = add_r
+
+
+-(f::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = ScalarFieldR{T, TR, TG}(f.basis, f.order, -f.r_data)
+-(f::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = ScalarFieldG{T, TR, TG}(f.basis, f.order, -f.g_data)
+
+sub_g(a::Number, g::ScalarField{T, TR, TG}) where {T, TR, TG} = add_g(a, -g)
+sub_g(g::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = add_g(g, -a)
+
+sub_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = add_g(f, -g) # f̃(𝐆) - g̃(𝐆) → h̃(𝐆) 
+sub_g(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = 𝔉(sub_r(f, g)) # f(𝐫) + g(𝐫) → h̃(𝐆)
+sub_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = sub_g(f, 𝔉(g)) # f̃(𝐆) + g(𝐫) → h̃(𝐆)
+sub_g(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = sub_g(𝔉(f), g) # f(𝐫) + g̃(𝐆) → h̃(𝐆)
+
+sub_r(a::Number, g::ScalarField{T, TR, TG}) where {T, TR, TG} = add_r(a, -g)
+sub_r(g::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = add_r(g, -a)
+
+sub_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = 𝔉⁻¹(sub_g(f, g)) # f̃(𝐆) + g̃(𝐆) → h(𝐫)
+sub_r(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = ScalarFieldR{T, TR, TG}(f.basis, max(f.order, g.order), f.r_data .- g.r_data) # f(𝐫) + g(𝐫) → h(𝐫)
+sub_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = sub_r(𝔉⁻¹(f), g) # f̃(𝐆) + g(𝐫) → h(𝐫)
+sub_r(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = sub_r(f, 𝔉⁻¹(g)) # f(𝐫) + g̃(𝐆) → h(𝐫)
+
+-(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = sub_g(f, g)
+-(a::Number, g::ScalarField{T, TR, TG}) where {T, TR, TG} = sub_g(a, g)
+-(g::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = sub_g(a, g)
+(-ᵣ) = sub_r
 
