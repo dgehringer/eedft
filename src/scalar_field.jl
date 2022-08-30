@@ -149,17 +149,6 @@ sum_G_square(f::ScalarFieldG{T, TR, TG}) where {T, TR <: Complex, TG} = sum(real
 
 integrate(f::ScalarField{T, TR, TG}) where {T, TR, TG} = sqrt(sum_G_square(f))
 
-
-# f̃(𝐆) + g̃(𝐆) → h̃(𝐆) 
-function add_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG}
-    f.order == g.order && return ScalarFieldG{T, TR, TG}(f.basis, f.order, f.g_data .+ g.g_data)
-    s_up, s_down = ((f.order > g.order) ? (f, g) : (g, f))
-    upscale_map = f.basis.G_shell_upscale_maps[s_down.order => s_up.order]
-    g_data_up = copy(s_up.g_data)
-    g_data_up[upscale_map] = g_data_up[upscale_map] .+ s_down.g_data
-    ScalarFieldG{T, TR, TG}(f.basis, max(f.order, g.order), g_data_up)
-end
-
 function add_g(a::Number, f::ScalarFieldG{T, TR, TG}) where {T, TR, TG}
     G0_index = findfirst((c) -> c ≈ 0.0, f.basis.G_shell_norms[f.order])
     G0_index === nothing && throw(BoundsError("No constant index"))
@@ -171,6 +160,16 @@ end
 add_g(a::Number, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = add_g(a, 𝔉(g))
 add_g(g::ScalarFieldG{T, TR, TG}, a::Number) where {T, TR, TG} = add_g(a, g)
 add_g(g::ScalarFieldR{T, TR, TG}, a::Number) where {T, TR, TG} = add_g(a, 𝔉(g))
+
+# f̃(𝐆) + g̃(𝐆) → h̃(𝐆) 
+function add_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG}
+    f.order == g.order && return ScalarFieldG{T, TR, TG}(f.basis, f.order, f.g_data .+ g.g_data)
+    s_up, s_down = ((f.order > g.order) ? (f, g) : (g, f))
+    upscale_map = f.basis.G_shell_upscale_maps[s_down.order => s_up.order]
+    g_data_up = copy(s_up.g_data)
+    g_data_up[upscale_map] = g_data_up[upscale_map] .+ s_down.g_data
+    ScalarFieldG{T, TR, TG}(f.basis, max(f.order, g.order), g_data_up)
+end
 
 add_g(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = 𝔉(add_r(f, g)) # f(𝐫) + g(𝐫) → h̃(𝐆)
 add_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = add_g(f, 𝔉(g)) # f̃(𝐆) + g(𝐫) → h̃(𝐆)
@@ -199,20 +198,51 @@ sub_g(a::Number, g::ScalarField{T, TR, TG}) where {T, TR, TG} = add_g(a, -g)
 sub_g(g::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = add_g(g, -a)
 
 sub_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = add_g(f, -g) # f̃(𝐆) - g̃(𝐆) → h̃(𝐆) 
-sub_g(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = 𝔉(sub_r(f, g)) # f(𝐫) + g(𝐫) → h̃(𝐆)
-sub_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = sub_g(f, 𝔉(g)) # f̃(𝐆) + g(𝐫) → h̃(𝐆)
-sub_g(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = sub_g(𝔉(f), g) # f(𝐫) + g̃(𝐆) → h̃(𝐆)
+sub_g(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = 𝔉(sub_r(f, g)) # f(𝐫) - g(𝐫) → h̃(𝐆)
+sub_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = sub_g(f, 𝔉(g)) # f̃(𝐆) - g(𝐫) → h̃(𝐆)
+sub_g(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = sub_g(𝔉(f), g) # f(𝐫) - g̃(𝐆) → h̃(𝐆)
 
 sub_r(a::Number, g::ScalarField{T, TR, TG}) where {T, TR, TG} = add_r(a, -g)
 sub_r(g::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = add_r(g, -a)
 
-sub_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = 𝔉⁻¹(sub_g(f, g)) # f̃(𝐆) + g̃(𝐆) → h(𝐫)
+sub_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = 𝔉⁻¹(sub_g(f, g)) # f̃(𝐆) - g̃(𝐆) → h(𝐫)
 sub_r(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = ScalarFieldR{T, TR, TG}(f.basis, max(f.order, g.order), f.r_data .- g.r_data) # f(𝐫) + g(𝐫) → h(𝐫)
-sub_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = sub_r(𝔉⁻¹(f), g) # f̃(𝐆) + g(𝐫) → h(𝐫)
-sub_r(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = sub_r(f, 𝔉⁻¹(g)) # f(𝐫) + g̃(𝐆) → h(𝐫)
+sub_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = sub_r(𝔉⁻¹(f), g) # f̃(𝐆) - g(𝐫) → h(𝐫)
+sub_r(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = sub_r(f, 𝔉⁻¹(g)) # f(𝐫) - g̃(𝐆) → h(𝐫)
 
 -(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = sub_g(f, g)
 -(a::Number, g::ScalarField{T, TR, TG}) where {T, TR, TG} = sub_g(a, g)
 -(g::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = sub_g(a, g)
 (-ᵣ) = sub_r
+
+
+mul_r(a::Number, f::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = ScalarFieldR{T, TR, TG}(f.basis, f.order, a .* f.r_data)
+mul_r(a::Number, f::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = 𝔉⁻¹(ScalarFieldG{T, TR, TG}(f.basis, f.order, a .* f.g_data))
+mul_r(f::ScalarFieldR{T, TR, TG}, a::Number) where {T, TR, TG} = mul_r(a, f)
+mul_r(f::ScalarFieldG{T, TR, TG}, a::Number) where {T, TR, TG} = mul_r(a, f)
+
+# f(𝐫) * g(𝐫) → h(𝐫)
+function mul_r(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG}
+    f.order + g.order > max(keys(f.basis.G_shell_num_waves)...) && throw(DomainError("Multiplication would lead to and order of $(f.order + g.order)"))
+    ScalarFieldR{T, TR, TG}(f.basis, f.order + g.order, f.r_data .* g.r_data)
+end
+
+mul_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = mul_r(𝔉⁻¹(f), g) # f̃(𝐆) * g(𝐫) → h(𝐫)
+mul_r(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = mul_r(f, 𝔉⁻¹(g)) # f(𝐫) * g̃(𝐆) → h(𝐫)
+mul_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = mul_r(𝔉⁻¹(f), 𝔉⁻¹(g)) # f̃(𝐆) * g̃(𝐆) → h(𝐫)
+
+
+mul_g(a::Number, f::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = 𝔉(ScalarFieldR{T, TR, TG}(f.basis, f.order, a .* f.r_data))
+mul_g(a::Number, f::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = ScalarFieldG{T, TR, TG}(f.basis, f.order, a .* f.g_data)
+mul_g(f::ScalarFieldR{T, TR, TG}, a::Number) where {T, TR, TG} = mul_g(a, f)
+mul_g(f::ScalarFieldG{T, TR, TG}, a::Number) where {T, TR, TG} = mul_g(a, f)
+
+# in any case Multiplication is done is real space
+mul_g(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = 𝔉(mul_r(f, g))
+
+*(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = mul_g(f, g)
+*(a::Number, g::ScalarField{T, TR, TG}) where {T, TR, TG} = mul_g(a, g)
+*(g::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = mul_g(a, g)
+
+(*ᵣ) = mul_r
 

@@ -27,9 +27,10 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
 
     @testset "FFT real-space type: $TR" for TR in (Float64, ComplexF64)
 
-        basis = PlaneWaveBasis(fcc_al, 300.0, TR)
+        basis = PlaneWaveBasis(fcc_al, 30.0, TR)
+        max_shells = max(keys(basis.G_shell_num_waves)...)
 
-        @testset "𝐆($shell)" for shell in 1:max(keys(basis.G_shell_num_waves)...)
+        @testset "𝐆($shell)" for shell in 1:max_shells
             
             f̃ = make_scalar_field(TR, basis, shell)
             f = 𝔉⁻¹(f̃)
@@ -100,7 +101,7 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
 
             end
 
-            @testset "𝐆($shell) → 𝐆($shell_other)" for shell_other in 1:max(keys(basis.G_shell_num_waves)...)
+            @testset "𝐆($shell) → 𝐆($shell_other)" for shell_other in 1:max_shells
                 
                 g̃ = make_scalar_field(TR, basis, shell_other, 200.0)
                 g = 𝔉⁻¹(g̃)
@@ -140,37 +141,62 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                     result_g = 𝔉(result_r)
                     # print("SUM: $(sum(result_r)) \n")
 
-                    # 𝐫 + 𝐫 → 𝐫
+                    # 𝐫 - 𝐫 → 𝐫
                     @test sub_r(f, g) ≈ result_r atol=atol
                     @test sub_r(g, f) ≈ -result_r atol=atol
 
-                    # 𝐫 + 𝐆 → 𝐫
+                    # 𝐫 - 𝐆 → 𝐫
                     @test sub_r(f, g̃) ≈ result_r atol=atol
                     @test sub_r(g̃, f) ≈ -result_r atol=atol
 
-                    # 𝐆 + 𝐫 → 𝐫
+                    # 𝐆 - 𝐫 → 𝐫
                     @test sub_r(f̃, g) ≈ result_r atol=atol
                     @test sub_r(g, f̃) ≈ -result_r atol=atol
                     
-                    # 𝐆 + 𝐆 → 𝐆
+                    # 𝐆 - 𝐆 → 𝐆
                     @test sub_g(f̃, g̃) ≈ result_g atol=atol
                     @test sub_g(g̃, f̃) ≈ -result_g atol=atol
 
-                    # 𝐆 + 𝐆  → 𝐫
+                    # 𝐆 - 𝐆  → 𝐫
                     @test sub_r(f̃, g̃) ≈ result_r atol=atol
                     @test sub_r(g̃, f̃) ≈ -result_r atol=atol
 
-                    # 𝐫 + 𝐆 → 𝐆
+                    # 𝐫 - 𝐆 → 𝐆
                     @test sub_g(f, g̃) ≈ result_g atol=atol
                     @test sub_g(g̃, f) ≈ -result_g atol=atol
 
-                    # 𝐆 + 𝐫 → 𝐆
+                    # 𝐆 - 𝐫 → 𝐆
                     @test sub_g(f̃, g) ≈ result_g atol=atol
                     @test sub_g(g, f̃) ≈ -result_g atol=atol
 
-                    # 𝐫 + 𝐫 → 𝐆
+                    # 𝐫 - 𝐫 → 𝐆
                     @test sub_g(f, g) ≈ result_g atol=atol
                     @test sub_g(g, f) ≈ -result_g atol=atol
+                    
+                    @test g̃ - f ≈ -(f̃ - g) atol=atol
+                    @test g̃ -ᵣ f ≈ -(f̃ -ᵣ g) atol=atol
+                end
+
+                @testset "f(𝐫) * g(𝐫)" begin
+                    shell + shell_other > max_shells && continue
+                    result_r = ScalarFieldR{T, TR, TG}(f.basis, shell + shell_other, f.r_data .* g.r_data)
+                    result_g = 𝔉(result_r)
+    
+                    # 𝐫 + 𝐫 → 𝐫
+                    @test mul_r(f, g) ≈ result_r atol=atol
+                    @test mul_r(g, f) ≈ result_r atol=atol
+                    # 𝐫 + 𝐆 → 𝐫
+                    @test mul_r(f, g̃) ≈ result_r atol=atol
+                    @test mul_r(g̃, f) ≈ result_r atol=atol
+                    # 𝐆 + 𝐫 → 𝐫
+                    @test mul_r(f̃, g) ≈ result_r atol=atol
+                    @test mul_r(g, f̃) ≈ result_r atol=atol
+                    # 𝐆 + 𝐆  → 𝐫
+                    @test mul_r(f̃, g̃) ≈ result_r atol=atol
+                    @test mul_r(g̃, f̃) ≈ result_r atol=atol
+    
+                    @test mul_r(f̃, g) ≈ mul_r(f, g̃) atol=atol
+                    @test g̃ *ᵣ f ≈ f̃ *ᵣ g atol=atol
                 end
             end
         end
