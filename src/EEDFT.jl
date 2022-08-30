@@ -6,8 +6,8 @@ module EEDFT
     
 
 include("types.jl")
-include("atomistics/Species.jl")
-include("atomistics/Atoms.jl")
+include("atomistics/species.jl")
+include("atomistics/atoms.jl")
 include("basis.jl")
 include("scalar_field.jl")
 include("fft.jl")
