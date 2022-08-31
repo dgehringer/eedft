@@ -1,5 +1,5 @@
 
-import Base: -, +,*,inv,/, Callable,(==), isapprox
+import Base: -, +, *, inv, /, div, Callable,(==), isapprox
     
 
 struct ScalarFieldG{T <: Real, TR, TG}
@@ -246,3 +246,23 @@ mul_g(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = 
 
 (*ᵣ) = mul_r
 
+inv_r(f::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = ScalarFieldR{T, TR, TG}(f.basis, f.order, inv.(f.r_data))
+inv_r(f::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = inv_r(𝔉⁻¹(f))
+
+inv_g(f::ScalarField{T, TR, TG}) where {T, TR, TG} = 𝔉(inv_r(f))
+
+inv(f::ScalarField{T, TR, TG}) where {T, TR, TG} = inv_g(f)
+
+div_r(a::Number, f::ScalarField{T, TR, TG}) where {T, TR, TG} = mul_r(a, inv_r(f))
+div_r(f::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = mul_r(f, inv(a))
+div_r(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = mul_r(f, inv_r(g))
+
+div_g(a::Number, f::ScalarField{T, TR, TG}) where {T, TR, TG} = 𝔉(div_r(a, f))
+div_g(f::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = 𝔉(div_r(f, a))
+div_g(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = 𝔉(div_r(f, g))
+
+/(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = div_g(f, g)
+/(a::Number, g::ScalarField{T, TR, TG}) where {T, TR, TG} = div_g(a, g)
+/(g::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = div_g(g, a)
+
+(/ᵣ) = div_r

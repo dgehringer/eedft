@@ -56,12 +56,12 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
             # Check Parsevals theorem 1/N ∫f(𝐫)f*(𝐫)d𝐫 = ∫f̃(𝐆)f̃*(𝐆)d𝐆 
             @test integrate(f) ≈ integrate(𝔉(f)) rtol=1e-5
 
-            @testset "-f(𝐫)" begin
+            @testset "-f(𝐫)|f̃(𝐆)" begin
                 @test (-f).r_data ≈ -(f.r_data) atol=atol
                 @test (-f̃).g_data ≈ -(f̃.g_data) atol=atol 
             end
 
-            @testset "f(𝐫) + C" begin
+            @testset "f(𝐫)|f̃(𝐆) + C" begin
                 number = rand(TR) * 100
                 result_r = ScalarFieldR{T, TR, TG}(f.basis, f.order, f.r_data .+ number)
                 result_g = 𝔉(result_r)
@@ -78,10 +78,9 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                 @test add_g(f̃, number) ≈ result_g atol=atol
                 @test add_g(number, f) ≈ result_g atol=atol
                 @test add_g(number, f̃) ≈ result_g atol=atol
-
             end
 
-            @testset "f(𝐫) - C" begin
+            @testset "f(𝐫)|f̃(𝐆) - C" begin
                 number = rand(TR) * 100
                 result_r = ScalarFieldR{T, TR, TG}(f.basis, f.order, f.r_data .- number)
                 result_g = 𝔉(result_r)
@@ -94,11 +93,59 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                 @test (number - f̃) ≈ -(f - number) atol=atol
                 @test (number +ᵣ f̃) ≈ -(f +ᵣ number) atol=atol
 
-                @test add_g(f, number) ≈ result_g atol=atol
-                @test add_g(number, f) ≈ -result_g atol=atol
-                @test add_g(f̃, number) ≈ result_g atol=atol
-                @test add_g(number, f̃) ≈ -result_g atol=atol
+                @test sub_g(f, number) ≈ result_g atol=atol
+                @test sub_g(number, f) ≈ -result_g atol=atol
+                @test sub_g(f̃, number) ≈ result_g atol=atol
+                @test sub_g(number, f̃) ≈ -result_g atol=atol
+            end
 
+            @testset "inv(f(𝐫)|f̃(𝐆))" begin
+                result_r = ScalarFieldR{T, TR, TG}(f.basis, f.order, inv.(f.r_data))
+                result_g = 𝔉(result_r)
+
+                @test inv_r(f) ≈ result_r atol=atol
+                @test inv_r(f̃) ≈ result_r atol=atol
+
+                @test inv_g(f) ≈ result_g atol=atol
+                @test inv_g(f̃) ≈ result_g atol=atol
+            end
+
+            @testset "C * f(𝐫)|f̃(𝐆) * C" begin
+                number = rand(TR) * 100
+                result_r = ScalarFieldR{T, TR, TG}(f.basis, f.order, f.r_data .* number)
+                result_g = 𝔉(result_r)
+
+                @test mul_r(f, number) ≈ result_r atol=atol
+                @test mul_r(number, f̃) ≈ result_r atol=atol
+                @test mul_r(number, f) ≈ mul_r(f̃, number) atol=atol
+                @test (number *ᵣ f) ≈ (f̃ *ᵣ number) atol=atol
+                
+                @test mul_g(f, number) ≈ result_g atol=atol
+                @test mul_g(number, f̃) ≈ result_g atol=atol
+                @test mul_g(number, f) ≈ mul_g(f̃, number) atol=atol
+                @test (number * f) ≈ (f̃ * number) atol=atol
+            end
+
+            @testset "C / f(𝐫)|f̃(𝐆) / C" begin
+                number = rand(TR) * 100
+                result_r1 = ScalarFieldR{T, TR, TG}(f.basis, f.order, inv(number) .* f.r_data)
+                result_r2 = ScalarFieldR{T, TR, TG}(f.basis, f.order, number .* inv.(f.r_data))
+                result_g1 = 𝔉(result_r1)
+                result_g2 = 𝔉(result_r2)
+
+                @test div_r(number, f) ≈ result_r1 atol=atol
+                @test div_r(number, f̃) ≈ result_r1 atol=atol
+                @test div_r(f, number) ≈ result_r2 atol=atol
+                @test div_r(f̃, number) ≈ result_r2 atol=atol
+                @test number /ᵣ f ≈ result_r1 atol=atol
+                @test f̃ /ᵣ number ≈ result_r2 atol=atol
+
+                @test div_g(number, f) ≈ result_g1 atol=atol
+                @test div_g(number, f̃) ≈ result_g1 atol=atol
+                @test div_g(f, number) ≈ result_g2 atol=atol
+                @test div_g(f̃, number) ≈ result_g2 atol=atol
+                @test number / f ≈ result_g1 atol=atol
+                @test f̃ / number ≈ result_g2 atol=atol
             end
 
             @testset "𝐆($shell) → 𝐆($shell_other)" for shell_other in 1:max_shells
@@ -106,7 +153,7 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                 g̃ = make_scalar_field(TR, basis, shell_other, 200.0)
                 g = 𝔉⁻¹(g̃)
 
-                @testset "f(𝐫) + g(𝐫)" begin
+                @testset "f(𝐫)|f̃(𝐆) + g(𝐫)|g̃(𝐆)" begin
                     
                     result_r = ScalarFieldR{T, TR, TG}(f.basis, max(shell, shell_other), f.r_data .+ g.r_data) 
                     result_g = 𝔉(result_r)
@@ -136,7 +183,7 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                     @test g̃ + f ≈ f̃ + g atol=atol
                 end
 
-                @testset "f(𝐫) - g(𝐫)" begin
+                @testset "f(𝐫)|f̃(𝐆) - g(𝐫)|g̃(𝐆)" begin
                     result_r = ScalarFieldR{T, TR, TG}(f.basis, max(shell, shell_other), f.r_data .- g.r_data)
                     result_g = 𝔉(result_r)
                     # print("SUM: $(sum(result_r)) \n")
@@ -177,7 +224,7 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                     @test g̃ -ᵣ f ≈ -(f̃ -ᵣ g) atol=atol
                 end
 
-                @testset "f(𝐫) * g(𝐫)" begin
+                @testset "f(𝐫)|f̃(𝐆) * g(𝐫)|g̃(𝐆)" begin
                     shell + shell_other > max_shells && continue
                     result_r = ScalarFieldR{T, TR, TG}(f.basis, shell + shell_other, f.r_data .* g.r_data)
                     result_g = 𝔉(result_r)
@@ -197,6 +244,67 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
     
                     @test mul_r(f̃, g) ≈ mul_r(f, g̃) atol=atol
                     @test g̃ *ᵣ f ≈ f̃ *ᵣ g atol=atol
+
+                    # 𝐆 - 𝐆 → 𝐆
+                    @test mul_g(f̃, g̃) ≈ result_g atol=atol
+                    @test mul_g(g̃, f̃) ≈ result_g atol=atol
+
+                    # 𝐫 - 𝐆 → 𝐆
+                    @test mul_g(f, g̃) ≈ result_g atol=atol
+                    @test mul_g(g̃, f) ≈ result_g atol=atol
+
+                    # 𝐆 - 𝐫 → 𝐆
+                    @test mul_g(f̃, g) ≈ result_g atol=atol
+                    @test mul_g(g, f̃) ≈ result_g atol=atol
+
+                    # 𝐫 - 𝐫 → 𝐆
+                    @test mul_g(f, g) ≈ result_g atol=atol
+                    @test mul_g(g, f) ≈ result_g atol=atol
+                    @test mul_g(f̃, g) ≈ mul_g(f, g̃) atol=atol
+
+                    @test g̃ * f ≈ f̃ * g atol=atol
+                end
+
+                @testset "f(𝐫)|f̃(𝐆) / g(𝐫)|g̃(𝐆)" begin
+                    shell + shell_other > max_shells && continue
+                    result_r1 = ScalarFieldR{T, TR, TG}(f.basis, shell + shell_other, f.r_data .* inv.(g.r_data)) # f / g
+                    result_r2 = ScalarFieldR{T, TR, TG}(f.basis, shell + shell_other, g.r_data .* inv.(f.r_data)) # g / f
+                    result_g1 = 𝔉(result_r1)
+                    result_g2 = 𝔉(result_r2)
+    
+                    # 𝐫 + 𝐫 → 𝐫
+                    @test div_r(f, g) ≈ result_r1 atol=atol
+                    @test div_r(g, f) ≈ result_r2 atol=atol
+                    # 𝐫 + 𝐆 → 𝐫
+                    @test div_r(f, g̃) ≈ result_r1 atol=atol
+                    @test div_r(g̃, f) ≈ result_r2 atol=atol
+                    # 𝐆 + 𝐫 → 𝐫
+                    @test div_r(f̃, g) ≈ result_r1 atol=atol
+                    @test div_r(g, f̃) ≈ result_r2 atol=atol
+                    # 𝐆 + 𝐆  → 𝐫
+                    @test div_r(f̃, g̃) ≈ result_r1 atol=atol
+                    @test div_r(g̃, f̃) ≈ result_r2 atol=atol
+    
+                    @test div_r(f̃, g) ≈ div_r(f, g̃) atol=atol
+                    @test div_r(g, f̃) ≈ div_r(g̃, f) atol=atol
+                    @test g̃ /ᵣ f ≈ g /ᵣ f̃ atol=atol
+
+                    # 𝐆 - 𝐆 → 𝐆
+                    @test div_g(f̃, g̃) ≈ result_g1 atol=atol
+                    @test div_g(g̃, f̃) ≈ result_g2 atol=atol
+
+                    # 𝐫 - 𝐆 → 𝐆
+                    @test div_g(f, g̃) ≈ result_g1 atol=atol
+                    @test div_g(g̃, f) ≈ result_g2 atol=atol
+
+                    # 𝐆 - 𝐫 → 𝐆
+                    @test div_g(f̃, g) ≈ result_g1 atol=atol
+                    @test div_g(g, f̃) ≈ result_g2 atol=atol
+
+                    # 𝐫 - 𝐫 → 𝐆
+                    @test div_g(f, g) ≈ result_g1 atol=atol
+                    @test div_g(g, f) ≈ result_g2 atol=atol
+                    @test g̃ / f ≈ g / f̃ atol=atol
                 end
             end
         end

@@ -34,5 +34,7 @@ export extract, fft_plan_data_types, unpack!
 export add_g, add_r, (+ᵣ)
 export sub_g, sub_r, (-ᵣ)
 export mul_g, mul_r, (*ᵣ)
+export div_g, div_r, (/ᵣ)
+export inv_g, inv_r, inv
 export isapprox, (≈)
 end
