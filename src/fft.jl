@@ -65,7 +65,7 @@ G_vectors_with_indices(T::Type{V}, G_grid_size::Tuple{Int, Int, Int}) where {V <
 G_vectors_with_indices(T::Type{V}, G_grid_size::Tuple{Int, Int, Int}) where {V <: Complex} = G_vectors_with_indices(T, G_grid_size, (FFTW.fftfreq, FFTW.fftfreq, FFTW.fftfreq))
 
 
-function r_vectors(r_grid_size::Tuple{Int, Int, Int}) where T
+function r_vectors(T::Type, r_grid_size::Tuple{Int, Int, Int}) 
     N1, N2, N3 = r_grid_size
     (Vec3{T}(T(i-1) / N1, T(j-1) / N2, T(k-1) / N3) for i = 1:N1, j = 1:N2, k = 1:N3)
 end

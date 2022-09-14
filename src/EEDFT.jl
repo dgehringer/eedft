@@ -17,7 +17,10 @@ include("bivector.jl")
 export species
 export Atoms
 export ScalarField, ScalarFieldR, ScalarFieldG
+
 export PlaneWaveBasis
+export r_vectors, r_vectors_cart
+export G_vectors, G_vectors_cart
 
 export integrate
 export fft_plan_data_types
@@ -37,4 +40,5 @@ export mul_g, mul_r, (*ᵣ)
 export div_g, div_r, (/ᵣ)
 export inv_g, inv_r, inv
 export isapprox, (≈)
+export diff_g, diff_r, (∂ᵢ), (∂ⱼ), (∂ₖ),(∂ᵢʳ), (∂ⱼʳ), (∂ₖʳ), (∇),  (∇ᵣ), (Δ), (Δᵣ)
 end

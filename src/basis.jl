@@ -101,7 +101,7 @@ G_vectors_with_indices(basis::PlaneWaveBasis{T, V}) where {T, V} = G_vectors_wit
 
 G_vectors_cart(basis::PlaneWaveBasis) = (basis.atoms.reciprocal_cell * G for G in G_vectors(basis))
 
-r_vectors(basis::PlaneWaveBasis{T, V}) where {T, V} = r_vectors(basis.r_grid_size)
+r_vectors(basis::PlaneWaveBasis{T, V}) where {T, V} = r_vectors(T, basis.r_grid_size)
 
 r_vectors_cart(basis::PlaneWaveBasis{T, V}) where {T, V} = (basis.atoms.cell * r for r in r_vectors(basis))
 

@@ -15,6 +15,8 @@ struct ScalarFieldR{T <: Real, TR, TG}
 end
 
 const ScalarField{T, TR, TG} = Union{ScalarFieldR{T, TR, TG}, ScalarFieldG{T, TR, TG}} where {T, TR, TG}
+const Vec3R{T, TR, TG} = Vec3{ScalarFieldR{T, TR, TG}} where {T, TR, TG}
+
 
 ScalarField(basis::PlaneWaveBasis{T, TR}, order::Int, g_data::Vector{TG}) where {T, TR, TG} = ScalarFieldG{T, TR, TG}(basis, order, g_data)
 
@@ -266,3 +268,35 @@ div_g(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = 
 /(g::ScalarField{T, TR, TG}, a::Number) where {T, TR, TG} = div_g(g, a)
 
 (/ᵣ) = div_r
+
+function diff_g(f::ScalarFieldG{T, TR, TG}, power::Int, axis::Int) where {T, TR, TG}
+    (axis < 1 || axis > 3) && throw(DomainError("Axes must be between 1 and 3"))
+    ScalarFieldG{T, TR, TG}(f.basis, f.order, f.g_data .* ((1im * f.basis.G_shell_vectors[f.order][axis, :]) .^ power))
+end
+
+diff_g(f::ScalarFieldR{T, TR, TG}, power::Int, axis::Int) where {T, TR, TG} = diff_g(𝔉(f), power, axis)
+
+diff_r(f::ScalarField{T, TR, TG}, power::Int, axis::Int) where {T, TR, TG} = 𝔉⁻¹(diff_g(f, power, axis))
+
+∂ᵢ(f::ScalarField{T, TR, TG}) where {T, TR, TG} = diff_g(f, 1, 1)
+∂ⱼ(f::ScalarField{T, TR, TG}) where {T, TR, TG} = diff_g(f, 1, 2)
+∂ₖ(f::ScalarField{T, TR, TG}) where {T, TR, TG} = diff_g(f, 1, 3)
+
+∂ᵢʳ(f::ScalarField{T, TR, TG}) where {T, TR, TG} = diff_r(f, 1, 1)
+∂ⱼʳ(f::ScalarField{T, TR, TG}) where {T, TR, TG} = diff_r(f, 1, 2)
+∂ₖʳ(f::ScalarField{T, TR, TG}) where {T, TR, TG} = diff_r(f, 1, 3)
+
+
+nabla_g(f::ScalarField{T, TR, TG}) where {T, TR, TG} = Vec3(∂ᵢ(f), ∂ⱼ(f), ∂ₖ(f))
+nabla_r(f::ScalarField{T, TR, TG}) where {T, TR, TG} = Vec3(∂ᵢʳ(f), ∂ⱼʳ(f), ∂ₖʳ(f))
+
+∇ = nabla_g
+∇ᵣ = nabla_r
+
+laplace_g(f::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = ScalarFieldG{T, TR, TG}(f.basis, f.order, -(f.basis.G_shell_norms[f.order] .^ 2) .* f.g_data)
+laplace_g(f::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = laplace_g(𝔉(f))
+laplace_r(f::ScalarField{T, TR, TG}) where {T, TR, TG} = 𝔉⁻¹(laplace_g(f))
+
+Δ = laplace_g
+Δᵣ = laplace_r
+
