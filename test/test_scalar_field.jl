@@ -27,7 +27,7 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
 
     @testset "FFT real-space type: $TR" for TR in (Float64, ComplexF64)
 
-        basis = PlaneWaveBasis(fcc_al, 30.0, TR)
+        basis = PlaneWaveBasis(fcc_al, 100.0, TR)
         max_shells = max(keys(basis.G_shell_num_waves)...)
 
         @testset "𝐆($shell)" for shell in 1:max_shells
@@ -124,6 +124,40 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                 @test mul_g(number, f̃) ≈ result_g atol=atol
                 @test mul_g(number, f) ≈ mul_g(f̃, number) atol=atol
                 @test (number * f) ≈ (f̃ * number) atol=atol
+            end
+
+            @testset "Δf|Δf̃" begin
+                @test Δ(f) ≈ diff_g(f, 2, 1) + diff_g(f, 2, 2) + diff_g(f, 2, 3)
+                @test Δ(f̃) ≈ diff_g(f̃, 2, 1) + diff_g(f̃, 2, 2) + diff_g(f̃, 2, 3)
+
+                @test Δᵣ(f) ≈ diff_r(f, 2, 1) + diff_r(f, 2, 2) + diff_r(f, 2, 3)
+                @test Δᵣ(f̃) ≈ diff_r(f̃, 2, 1) + diff_r(f̃, 2, 2) + diff_r(f̃, 2, 3)
+            end
+
+            @testset "∂ᵢf, ∂ⱼf, ∂ₖf" begin
+                for (ax, ∂₁, ∂₁ʳ) in zip(1:3, (∂ᵢ, ∂ⱼ, ∂ₖ),  (∂ᵢʳ, ∂ⱼʳ, ∂ₖʳ))
+                    fourier_derivative_factor = basis.G_shell_vectors[shell][ax, :] * 1im
+                    @test ∂₁(f̃).g_data ./ f̃.g_data ≈ fourier_derivative_factor
+                    @test ∂₁(f).g_data ./ f̃.g_data ≈ fourier_derivative_factor
+
+                    @test 𝔉(∂₁ʳ(f̃)).g_data ./ f̃.g_data ≈ fourier_derivative_factor
+                    @test 𝔉(∂₁ʳ(f)).g_data ./ f̃.g_data ≈ fourier_derivative_factor
+
+                    # Test Satz von Schwarz ∂₁∂₂ = ∂₂∂₁
+                    for (sax, ∂₂, ∂₂ʳ) in zip(1:3, (∂ᵢ, ∂ⱼ, ∂ₖ),  (∂ᵢʳ, ∂ⱼʳ, ∂ₖʳ))
+                        sax == ax && continue
+
+                        @test ∂₁(∂₂(f)) ≈ ∂₂(∂₁(f))
+                        @test ∂₁(∂₂(f̃)) ≈ ∂₂(∂₁(f))
+                        @test ∂₁(∂₂(f)) ≈ ∂₂(∂₁(f̃))
+                        @test ∂₁(∂₂(f̃)) ≈ ∂₂(∂₁(f̃))
+
+                        @test ∂₁(∂₂ʳ(f̃)) ≈ ∂₂(∂₁(f̃))
+                        @test ∂₁ʳ(∂₂(f̃)) ≈ ∂₂ʳ(∂₁(f̃))
+                        @test ∂₁ʳ(∂₂ʳ(f̃)) ≈ ∂₂ʳ(∂₁ʳ(f̃))
+                        @test ∂₁(∂₂ʳ(f̃)) ≈ ∂₂(∂₁ʳ(f̃))
+                    end
+                end
             end
 
             @testset "C / f(𝐫)|f̃(𝐆) / C" begin
@@ -304,7 +338,9 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                     # 𝐫 - 𝐫 → 𝐆
                     @test div_g(f, g) ≈ result_g1 atol=atol
                     @test div_g(g, f) ≈ result_g2 atol=atol
+                    
                     @test g̃ / f ≈ g / f̃ atol=atol
+                    @test g /ᵣ f ≈ inv(f̃ /ᵣ g̃) atol=atol 
                 end
             end
         end
