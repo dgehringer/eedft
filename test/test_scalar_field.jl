@@ -25,7 +25,7 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
 
     atol = 1e-6
 
-    @testset "FFT real-space type: $TR" for TR in (Float64, ComplexF64)
+    @testset "FFT real-space type: $TR" for TR in (ComplexF64, )
 
         basis = PlaneWaveBasis(fcc_al, 100.0, TR)
         max_shells = max(keys(basis.G_shell_num_waves)...)
@@ -50,7 +50,11 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                 f̃_tmp = 𝔉!(f_tmp, g_grid)
                 @test f̃_tmp.g_data ≈ g_data_tmp atol=atol
 
-                @test 𝔉⁻¹(𝔉(f)) ≈ f atol=1e-5
+                @test 𝔉(𝔉⁻¹(f̃)) ≈ f̃
+                @test 𝔉⁻¹(𝔉(f)) ≈ f
+
+                @test 𝔉(𝔉⁻¹(𝔉(𝔉⁻¹(f̃)))) ≈ f̃
+                @test 𝔉⁻¹(𝔉(𝔉⁻¹(𝔉(f)))) ≈ f
             end
 
             # Check Parsevals theorem 1/N ∫f(𝐫)f*(𝐫)d𝐫 = ∫f̃(𝐆)f̃*(𝐆)d𝐆 
@@ -136,12 +140,21 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
 
             @testset "∂ᵢf, ∂ⱼf, ∂ₖf" begin
                 for (ax, ∂₁, ∂₁ʳ) in zip(1:3, (∂ᵢ, ∂ⱼ, ∂ₖ),  (∂ᵢʳ, ∂ⱼʳ, ∂ₖʳ))
-                    fourier_derivative_factor = basis.G_shell_vectors[shell][ax, :] * 1im
-                    @test ∂₁(f̃).g_data ./ f̃.g_data ≈ fourier_derivative_factor
-                    @test ∂₁(f).g_data ./ f̃.g_data ≈ fourier_derivative_factor
+                    Gᵢ = (inforder(f) ? basis.𝐆[ax, :, :, :] : f.basis.G_shell_vectors[f.order][ax, :]) * 1im
+                    result_g = (f̃.g_data .* Gᵢ)
+                    
 
-                    @test 𝔉(∂₁ʳ(f̃)).g_data ./ f̃.g_data ≈ fourier_derivative_factor
-                    @test 𝔉(∂₁ʳ(f)).g_data ./ f̃.g_data ≈ fourier_derivative_factor
+                    @test ∂₁(𝔉(f)) ≈ ∂₁(f̃)
+                    @test ∂₁(f) ≈ ∂₁(𝔉⁻¹(f̃))
+                    @test ∂₁(f̃).g_data ≈ result_g
+                    # @test ∂₁(f).g_data ./ 9.223372036854778e+18 ≈ result_g
+                    
+                    
+                    @test ∂₁(𝔉(f)) ≈ ∂₁(f̃)
+                    @test f ≈ 𝔉⁻¹(f̃)
+
+                    # @test 𝔉(∂₁ʳ(f̃)).g_data ./ 9.223372036854778e+18 ≈ result_g
+                    # @test 𝔉(∂₁ʳ(f)).g_data ./ (9.223372036854778e+18^2) ≈ result_g
 
                     # Test Satz von Schwarz ∂₁∂₂ = ∂₂∂₁
                     for (sax, ∂₂, ∂₂ʳ) in zip(1:3, (∂ᵢ, ∂ⱼ, ∂ₖ),  (∂ᵢʳ, ∂ⱼʳ, ∂ₖʳ))
@@ -259,8 +272,8 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                 end
 
                 @testset "f(𝐫)|f̃(𝐆) * g(𝐫)|g̃(𝐆)" begin
-                    shell + shell_other > max_shells && continue
-                    result_r = ScalarFieldR{T, TR, TG}(f.basis, shell + shell_other, f.r_data .* g.r_data)
+                    shell_result = shell + shell_other > max_shells ? InfOrder : shell + shell_other
+                    result_r = ScalarFieldR{T, TR, TG}(f.basis, shell_result, f.r_data .* g.r_data)
                     result_g = 𝔉(result_r)
     
                     # 𝐫 + 𝐫 → 𝐫
@@ -300,9 +313,9 @@ scalar_field_types(::ScalarField{T, TR, TG}) where {T, TR, TG} = (T, TR, TG)
                 end
 
                 @testset "f(𝐫)|f̃(𝐆) / g(𝐫)|g̃(𝐆)" begin
-                    shell + shell_other > max_shells && continue
-                    result_r1 = ScalarFieldR{T, TR, TG}(f.basis, shell + shell_other, f.r_data .* inv.(g.r_data)) # f / g
-                    result_r2 = ScalarFieldR{T, TR, TG}(f.basis, shell + shell_other, g.r_data .* inv.(f.r_data)) # g / f
+                    shell_result = shell + shell_other > max_shells ? InfOrder : shell + shell_other
+                    result_r1 = ScalarFieldR{T, TR, TG}(f.basis, shell_result, f.r_data .* inv.(g.r_data)) # f / g
+                    result_r2 = ScalarFieldR{T, TR, TG}(f.basis, shell_result, g.r_data .* inv.(f.r_data)) # g / f
                     result_g1 = 𝔉(result_r1)
                     result_g2 = 𝔉(result_r2)
     
