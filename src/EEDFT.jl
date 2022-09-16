@@ -33,7 +33,7 @@ export fft_plan_data_types
 𝔉⁻¹! = G_to_r!
 
 export 𝔉, 𝔉!, 𝔉⁻¹, 𝔉⁻¹!, r_to_G, r_to_G!, G_to_r, G_to_r!
-export extract, fft_plan_data_types, unpack!
+export extract, fft_plan_data_types, unpack!, sizeof, InfOrder, inforder
 export add_g, add_r, (+ᵣ)
 export sub_g, sub_r, (-ᵣ)
 export mul_g, mul_r, (*ᵣ)

@@ -20,6 +20,8 @@ struct PlaneWaveBasis{T <: Real, V}
     fft_plan_fw
     fft_plan_bw
 
+    𝐆::Array{T, 4}
+
     G_shell_num_waves::Dict{Int, Int}
     G_shell_indices::Dict{Int, Vector{CartesianIndex}}
     G_shell_indices_flat::Dict{Int, Vector{Int}}
@@ -39,8 +41,11 @@ function compute_G_shells(Gshells, Ecut::T, reciprocal_cell::Mat3{T}, fft_grid_s
     shell_norms = Dict{Int, Vector{T}}(shell => [] for shell in Gshells)
     shell_upscale_map = Dict{Pair{Int, Int}, Vector{Int}}((shell_low => shell_high) => [] for shell_low in Gshells for shell_high in (shell_low+1):max(Gshells...))
     shell_upscale_ptrs = Dict{Int, Int}(shell => 1 for shell in Gshells)
+
+    𝐆 = Array{T, 4}(undef, 3, fft_grid_size...)
  
     for (idx, (Gi, G)) in enumerate(G_vectors_with_indices(data_type, fft_grid_size))
+        𝐆[:, Gi] = G
         for (shell, Gmax) in Gcuts
             Gcart = reciprocal_cell * G
             if norm(Gcart) ≤ Gmax 
@@ -65,7 +70,7 @@ function compute_G_shells(Gshells, Ecut::T, reciprocal_cell::Mat3{T}, fft_grid_s
         @assert all(flat_indices[lower_shell] .== flat_indices[upper_shell][indices])
     end
 
-    shell_indices, flat_indices, shell_usage, shell_vectors, shell_norms, shell_upscale_map
+    𝐆, shell_indices, flat_indices, shell_usage, shell_vectors, shell_norms, shell_upscale_map
 end
 
 
@@ -78,7 +83,7 @@ function PlaneWaveBasis(atoms::Atoms{T}, Ecut::T, K::Type{V}; fft_grid_size=noth
     out_fft_plan, out_back_fft_plan, r_grid_size, G_grid_size = build_fft_plans(K, fft_grid_size; flags=fftw_flags)
     
     basis_set_size = prod(fft_grid_size)
-    (shell_indices, flat_indices, shell_usage, shell_vectors, shell_norms, shell_upscale_map) = compute_G_shells(Gshells, Ecut, atoms.reciprocal_cell, fft_grid_size, K)
+    (G, shell_indices, flat_indices, shell_usage, shell_vectors, shell_norms, shell_upscale_map) = compute_G_shells(Gshells, Ecut, atoms.reciprocal_cell, fft_grid_size, K)
 
     dΩ = atoms.volume/basis_set_size
     G_to_r_norm = 1/sqrt(atoms.volume)
@@ -86,7 +91,7 @@ function PlaneWaveBasis(atoms::Atoms{T}, Ecut::T, K::Type{V}; fft_grid_size=noth
 
 
     PlaneWaveBasis{T, V}(r_grid_size, G_grid_size, Ecut, atoms, dΩ, r_to_G_norm, G_to_r_norm, out_fft_plan, 
-        out_back_fft_plan, shell_usage, shell_indices, flat_indices, shell_vectors, shell_norms, shell_upscale_map)
+        out_back_fft_plan, G, shell_usage, shell_indices, flat_indices, shell_vectors, shell_norms, shell_upscale_map)
 end
 
 

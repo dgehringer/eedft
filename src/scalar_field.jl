@@ -1,11 +1,11 @@
 
-import Base: -, +, *, inv, /, div, Callable,(==), isapprox
+import Base: -, +, *, inv, /, div, Callable,(==), isapprox, sizeof
     
 
 struct ScalarFieldG{T <: Real, TR, TG}
     basis::PlaneWaveBasis{T, TR}
     order::Int
-    g_data::Vector{TG}
+    g_data::Union{Vector{TG}, Array{TG, 3}}
 end
 
 struct ScalarFieldR{T <: Real, TR, TG}
@@ -14,17 +14,33 @@ struct ScalarFieldR{T <: Real, TR, TG}
     r_data::Array{TR, 3}
 end
 
+const InfOrder = typemax(Int)
 const ScalarField{T, TR, TG} = Union{ScalarFieldR{T, TR, TG}, ScalarFieldG{T, TR, TG}} where {T, TR, TG}
 const Vec3R{T, TR, TG} = Vec3{ScalarFieldR{T, TR, TG}} where {T, TR, TG}
 
 
-ScalarField(basis::PlaneWaveBasis{T, TR}, order::Int, g_data::Vector{TG}) where {T, TR, TG} = ScalarFieldG{T, TR, TG}(basis, order, g_data)
+function ScalarField(basis::PlaneWaveBasis{T, TR}, order::Int, g_data::Union{Vector{TG}, Array{TG, 3}}) where {T, TR, TG}
+    if order > max(keys(f.basis.G_shell_num_waves)...)
+        order = InfOrder
+    end
+    ScalarFieldG{T, TR, TG}(basis, order, g_data)
+end
 
 function ScalarField(basis::PlaneWaveBasis{T, TR}, order::Int, r_data::Array{TR, 3}) where {T, TR}
     TR_, TG = fft_plan_data_types(basis.fft_plan_fw)
     @assert TR_ == TR
+    if order > max(keys(f.basis.G_shell_num_waves)...)
+        order = InfOrder
+    end
     ScalarFieldR{T, TR, TG}(basis, order, r_data)
 end
+
+
+inforder(f::ScalarField{T, TR, TG}) where {T, TR, TG} = f.order == InfOrder
+
+sizeof(f::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = sizeof(f.r_data) + sizeof(Int) 
+sizeof(f::ScalarFieldG{T, TR, TG}) where {T, TR, TG} = sizeof(f.g_data) + sizeof(Int) 
+
 
 function ==(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG}
     f.order != g.order && return false
@@ -73,7 +89,12 @@ end
 
 
 function G_to_r!(f::ScalarFieldG{T, TR, TG}, f_fourier::Array{TG, 3}, f_real::Array{TR, 3}; normalize::Bool=true) where {T, TG, TR}
-    f_fourier = unpack!(f, f_fourier)
+    if inforder(f)
+        @assert size(f_fourier) == size(f.g_data)
+        f_fourier = copyto!(f_fourier, f.g_data)
+    else
+        f_fourier = unpack!(f, f_fourier)
+    end
     G_to_r!(f_fourier, f.basis, f_real; normalize=normalize)
     ScalarFieldR{T, TR, TG}(f.basis, f.order, f_real)
 end
@@ -90,13 +111,24 @@ end
 
 function G_to_r(f::ScalarFieldG{T, TR, TG}; normalize::Bool=true) where {T, TR, TG}
     f_fourier = Array{TG, 3}(undef, f.basis.G_grid_size)
-    unpack!(f, f_fourier)
+    if inforder(f)
+        @assert f.order == InfOrder
+        @assert size(f_fourier) == size(f.g_data)
+        f_fourier = copyto!(f_fourier, f.g_data)
+    else
+        f_fourier = unpack!(f, f_fourier)InfOrder
+    end
+
     ScalarFieldR{T, TR, TG}(f.basis, f.order, G_to_r(f_fourier, f.basis; normalize=normalize))
+end
+
+function G_to_r(f::Vec3{ScalarFieldG{T, TR, TG}}; normalize::Bool=true) where {T, TR, TG}
+    Vec3{ScalarFieldR{T, TR, TG}}(G_to_r(f̃ᵢ; normalize=normalize) for f̃ᵢ in f)
 end
 
 function r_to_G!(f::ScalarFieldR{T, TR, TG}, f_fourier::Array{TG, 3}; normalize::Bool=true) where {T, TG, TR}
     r_to_G!(f.r_data, f.basis, f_fourier; normalize=normalize)
-    ScalarFieldG{T, TR, TG}(f.basis, f.order, extract(f, f_fourier))
+    ScalarFieldG{T, TR, TG}(f.basis, f.order, inforder(f) ? f_fourier : extract(f, f_fourier))
 end
 
 function r_to_G!(f::ScalarFieldR{T, TR, TG}; normalize::Bool=true) where {T, TG, TR}
@@ -105,7 +137,12 @@ function r_to_G!(f::ScalarFieldR{T, TR, TG}; normalize::Bool=true) where {T, TG,
 end
 
 function r_to_G(f::ScalarFieldR{T, TR, TG}; normalize::Bool=true) where {T, TG, TR}
-    ScalarFieldG{T, TR, TG}(f.basis, f.order, extract(f, r_to_G(f.r_data, f.basis; normalize=normalize)))
+    f̃ = r_to_G(f.r_data, f.basis; normalize=normalize)
+    ScalarFieldG{T, TR, TG}(f.basis, f.order, inforder(f) ? f̃ : extract(f, f̃))
+end
+
+function r_to_G(f::Vec3{ScalarFieldR{T, TR, TG}}; normalize::Bool=true) where {T, TG, TR}
+    Vec3{ScalarFieldG{T, TR, TG}}(r_to_G(fᵢ; normalize=normalize) for fᵢ in f)
 end
 
 
@@ -152,10 +189,15 @@ sum_G_square(f::ScalarFieldG{T, TR, TG}) where {T, TR <: Complex, TG} = sum(real
 integrate(f::ScalarField{T, TR, TG}) where {T, TR, TG} = sqrt(sum_G_square(f))
 
 function add_g(a::Number, f::ScalarFieldG{T, TR, TG}) where {T, TR, TG}
-    G0_index = findfirst((c) -> c ≈ 0.0, f.basis.G_shell_norms[f.order])
-    G0_index === nothing && throw(BoundsError("No constant index"))
     g_data = copy(f.g_data)
-    g_data[G0_index] += a
+    if inforder(f)
+        g_data[0, 0, 0] += a
+    else
+        G0_index = findfirst((c) -> c ≈ 0.0, f.basis.G_shell_norms[f.order])
+        G0_index === nothing && throw(BoundsError("No constant index"))
+        g_data[G0_index] += a
+    end
+
     ScalarFieldG(f.basis, f.order, g_data)
 end
 
@@ -167,9 +209,16 @@ add_g(g::ScalarFieldR{T, TR, TG}, a::Number) where {T, TR, TG} = add_g(a, 𝔉(g
 function add_g(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldG{T, TR, TG}) where {T, TR, TG}
     f.order == g.order && return ScalarFieldG{T, TR, TG}(f.basis, f.order, f.g_data .+ g.g_data)
     s_up, s_down = ((f.order > g.order) ? (f, g) : (g, f))
-    upscale_map = f.basis.G_shell_upscale_maps[s_down.order => s_up.order]
+    
     g_data_up = copy(s_up.g_data)
-    g_data_up[upscale_map] = g_data_up[upscale_map] .+ s_down.g_data
+    if inforder(s_up)
+        g_data_down = Array{TG, 3}(undef, f.basis.G_grid_size...)
+        unpack!(s_down, g_data_down)
+        g_data_up = g_data_up .+ g_data_down
+    else
+        upscale_map = f.basis.G_shell_upscale_maps[s_down.order => s_up.order]
+        g_data_up[upscale_map] = g_data_up[upscale_map] .+ s_down.g_data
+    end
     ScalarFieldG{T, TR, TG}(f.basis, max(f.order, g.order), g_data_up)
 end
 
@@ -225,8 +274,15 @@ mul_r(f::ScalarFieldG{T, TR, TG}, a::Number) where {T, TR, TG} = mul_r(a, f)
 
 # f(𝐫) * g(𝐫) → h(𝐫)
 function mul_r(f::ScalarFieldR{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG}
-    f.order + g.order > max(keys(f.basis.G_shell_num_waves)...) && throw(DomainError("Multiplication would lead to and order of $(f.order + g.order)"))
-    ScalarFieldR{T, TR, TG}(f.basis, f.order + g.order, f.r_data .* g.r_data)
+    if inforder(f) || inforder(g)
+        order = InfOrder
+    elseif  (f.order + g.order) > max(keys(f.basis.G_shell_num_waves)...)
+        # @warn("Multiplication of f($(f.order)) * g($(g.order)) is not compactly representable any more")
+        order = InfOrder
+    else
+        order = f.order + g.order
+    end
+    ScalarFieldR{T, TR, TG}(f.basis, order, f.r_data .* g.r_data)
 end
 
 mul_r(f::ScalarFieldG{T, TR, TG}, g::ScalarFieldR{T, TR, TG}) where {T, TR, TG} = mul_r(𝔉⁻¹(f), g) # f̃(𝐆) * g(𝐫) → h(𝐫)
@@ -271,7 +327,8 @@ div_g(f::ScalarField{T, TR, TG}, g::ScalarField{T, TR, TG}) where {T, TR, TG} = 
 
 function diff_g(f::ScalarFieldG{T, TR, TG}, power::Int, axis::Int) where {T, TR, TG}
     (axis < 1 || axis > 3) && throw(DomainError("Axes must be between 1 and 3"))
-    ScalarFieldG{T, TR, TG}(f.basis, f.order, f.g_data .* ((1im * f.basis.G_shell_vectors[f.order][axis, :]) .^ power))
+    Gₓ = inforder(f) ? basis.𝐆[axis, :, :, :] : f.basis.G_shell_vectors[f.order][axis, :]
+    ScalarFieldG{T, TR, TG}(f.basis, f.order, f.g_data .* ((1im .* Gₓ) .^ power))
 end
 
 diff_g(f::ScalarFieldR{T, TR, TG}, power::Int, axis::Int) where {T, TR, TG} = diff_g(𝔉(f), power, axis)
@@ -299,4 +356,19 @@ laplace_r(f::ScalarField{T, TR, TG}) where {T, TR, TG} = 𝔉⁻¹(laplace_g(f))
 
 Δ = laplace_g
 Δᵣ = laplace_r
+
+function dot_r(f::Vec3{ScalarFieldR{T, TR, TG}}, g::Vec3{ScalarFieldR{T, TR, TG}}) where {T, TR, TG}
+    fᵢ, fⱼ, fₖ = f
+    gᵢ, gⱼ, gₖ = g
+    (fᵢ *ᵣ gᵢ) +ᵣ (fⱼ *ᵣ gⱼ) +ᵣ (fₖ *ᵣ gₖ)
+end
+
+dot_r(f::Vec3{ScalarFieldR{T, TR, TG}}, g::Vec3{ScalarFieldG{T, TR, TG}}) where {T, TR, TG} = dot_r(f, 𝔉⁻¹(g))
+dot_r(f::Vec3{ScalarFieldG{T, TR, TG}}, g::Vec3{ScalarFieldR{T, TR, TG}}) where {T, TR, TG} = dot_r(𝔉⁻¹(f), g)
+dot_r(f::Vec3{ScalarFieldG{T, TR, TG}}, g::Vec3{ScalarFieldG{T, TR, TG}}) where {T, TR, TG} = dot_r(𝔉⁻¹(f), 𝔉⁻¹(g))
+
+dot_g(f::Vec3{ScalarField{T, TR, TG}}, g::Vec3{ScalarField{T, TR, TG}}) where {T, TR, TG} = 𝔉(dot_r(f, g))
+
+(⋅) = dot_g
+(⋅ᵣ) = dot_r
 
