@@ -39,6 +39,7 @@ export sub_g, sub_r, (-ᵣ)
 export mul_g, mul_r, (*ᵣ)
 export div_g, div_r, (/ᵣ)
 export inv_g, inv_r, inv
+export dot_g, dot_r, (⋅), (⋅ᵣ)
 export isapprox, (≈)
 export diff_g, diff_r, (∂ᵢ), (∂ⱼ), (∂ₖ),(∂ᵢʳ), (∂ⱼʳ), (∂ₖʳ), (∇),  (∇ᵣ), (Δ), (Δᵣ)
 end
