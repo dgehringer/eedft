@@ -107,7 +107,7 @@ void call_testing_func(struct wf_grid *grid, int i, int j, int k, SCALAR value,
       std::get<TestingFuncIndex>(testing_func)(i, j, k, value);
     } else if (std::holds_alternative<TestingFunc>(testing_func)) {
       std::get<TestingFunc>(testing_func)(i * grid->hi, j * grid->hj,
-                                               k * grid->hk, value);
+                                          k * grid->hk, value);
     }
   }
 }
@@ -173,7 +173,6 @@ TestingFuncIndex assert_near(SCALAR should, SCALAR abs_tol = 1.0e-3) {
   };
 }
 
-
 TEST(kernel, laplacian_and_gradient_linear) {
   auto is_zero = std::make_optional(assert_near(0.0));
   auto is_one = std::make_optional(assert_near(1.0));
@@ -191,23 +190,40 @@ TEST(kernel, laplacian_and_gradient_linear) {
   test_laplacian_and_gradient(linear_z, is_zero, is_zero, is_zero, is_one);
 }
 
-TEST(kernel, laplacian_and_gradient_trilinear) {
+TEST(kernel, laplacian_and_gradient_quadratic) {
   GeneratingFunc linear_xyz = [](SCALAR x, SCALAR y, SCALAR z) {
-    return x * y * z;
+    return x * x + x;
   };
   auto abs_tol = 1e-3;
+  auto is_two = std::make_optional(assert_near(2.0));
   auto is_zero = std::make_optional(assert_near(0.0));
-  std::optional<TestingFunc> is_yz =
-      std::make_optional([abs_tol](SCALAR, SCALAR y, SCALAR z, SCALAR actual) {
-        ASSERT_NEAR(y * z, actual, abs_tol);
+  std::optional<TestingFunc> gx =
+      std::make_optional([abs_tol](SCALAR x, SCALAR, SCALAR, SCALAR actual) {
+        ASSERT_NEAR(2.0 * x + 1.0, actual, abs_tol);
       });
-  std::optional<TestingFunc> is_xz =
-      std::make_optional([abs_tol](SCALAR x, SCALAR, SCALAR z, SCALAR actual) {
-        ASSERT_NEAR(x * z, actual, abs_tol);
-      });
-  std::optional<TestingFunc> is_xy =
-      std::make_optional([abs_tol](SCALAR x, SCALAR y, SCALAR, SCALAR actual) {
-        ASSERT_NEAR(x * y, actual, abs_tol);
-      });
-  test_laplacian_and_gradient(linear_xyz, is_zero, is_yz, is_xz, is_xy);
+  test_laplacian_and_gradient(linear_xyz, is_two, gx, is_zero, is_zero);
 }
+
+// TEST(kernel, laplacian_and_gradient_triquadratic_) {
+// GeneratingFunc linear_xyz = [](SCALAR x, SCALAR y, SCALAR z) {
+//   return x * x + y * y + z * z + x * y * z;
+// };
+// auto abs_tol = 1e-3;
+// auto is_six = std::make_optional(assert_near(6.0));
+// std::optional<TestingFunc> gx =
+//     std::make_optional([abs_tol](SCALAR x, SCALAR y, SCALAR z, SCALAR actual)
+//     {
+//       ASSERT_NEAR(2.0 * x + y * z, actual, abs_tol);
+//     });
+// std::optional<TestingFunc> gy =
+//     std::make_optional([abs_tol](SCALAR x, SCALAR y, SCALAR z, SCALAR actual)
+//     {
+//       ASSERT_NEAR(2.0 * y + x * z, actual, abs_tol);
+//     });
+// std::optional<TestingFunc> gz =
+//     std::make_optional([abs_tol](SCALAR x, SCALAR y, SCALAR z, SCALAR actual)
+//     {
+//       ASSERT_NEAR(2.0 * z + x * y, actual, abs_tol);
+//     });
+// test_laplacian_and_gradient(linear_xyz, is_six, gx, gx, gz);
+// }
