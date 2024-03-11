@@ -181,8 +181,18 @@ void test_laplacian_and_gradient(
       consider_boundary = handle_boundary;
       grid_forall_block(&grid, apply_and_test, make_bounds(0, p),
                         make_bounds(p, nj - p), make_bounds(p, nk - p));
-      grid_forall_block(&grid, apply_and_test, make_bounds(ni-p, nj),
+      grid_forall_block(&grid, apply_and_test, make_bounds(ni-p, ni),
                         make_bounds(p, nj - p), make_bounds(p, nk - p));
+
+      grid_forall_block(&grid, apply_and_test, make_bounds(p, ni - p),
+                        make_bounds(0, p), make_bounds(p, nk - p));
+      grid_forall_block(&grid, apply_and_test, make_bounds(p, ni - p),
+                        make_bounds(nj - p, nj), make_bounds(p, nk - p));
+
+      grid_forall_block(&grid, apply_and_test, make_bounds(p, ni - p),
+                        make_bounds(p, nj - p), make_bounds(0, p));
+      grid_forall_block(&grid, apply_and_test, make_bounds(p, ni - p),
+                        make_bounds(p, nj - p), make_bounds(nk - p, nk));
     }
     std::free(grid.rho12);
   }
