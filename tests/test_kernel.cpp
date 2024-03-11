@@ -1,5 +1,6 @@
 
 #include "gtest/gtest.h"
+#include <cstdio>
 #include <cstdlib>
 #include <functional>
 #include <optional>
@@ -15,6 +16,7 @@ extern "C" {
 
 #define MAX_GRID_DIM FD_MAX_ORDER * 2
 
+typedef std::tuple<int, int> Bounds;
 typedef std::tuple<int, int, int> GridSize;
 typedef std::tuple<SCALAR, SCALAR, SCALAR> Spacings;
 typedef std::function<SCALAR(SCALAR, SCALAR, SCALAR)> GeneratingFunc;
@@ -76,18 +78,27 @@ struct wf_grid grid_from_func(GeneratingFunc func, uint8_t p,
                               std::make_optional(std::make_tuple(hi, hj, hk)));
 }
 
-void grid_forall_inner(struct wf_grid *grid, uint8_t p, AnyActionFunc func) {
+std::optional<Bounds> make_bounds(int min, int max) {
+  return std::make_optional(std::make_tuple(min, max));
+}
+
+void grid_forall_block(struct wf_grid *grid, AnyActionFunc func,
+                       std::optional<Bounds> xbounds = std::nullopt,
+                       std::optional<Bounds> ybounds = std::nullopt,
+                       std::optional<Bounds> zbounds = std::nullopt) {
   // again we assume that grid->rho12 == grid->si12 == grid->sj12 == grid->sk12
   // for each element
   int ni{grid->ni}, nj{grid->nj}, nk{grid->nk};
   auto jstride = nk;
   auto istride = nj * nk;
-  int p_ = static_cast<int>(p);
-  for (int i = p; i < (ni - p_); i++) {
+  auto [imin, imax] = xbounds.value_or(std::make_tuple(0, ni));
+  auto [jmin, jmax] = ybounds.value_or(std::make_tuple(0, nj));
+  auto [kmin, kmax] = zbounds.value_or(std::make_tuple(0, nk));
+  for (int i = imin; i < imax; i++) {
     SCALAR vi = i * grid->hi;
-    for (int j = p; j < (nj - p_); j++) {
+    for (int j = jmin; j < jmax; j++) {
       SCALAR vj = j * grid->hj;
-      for (int k = p; k < (nk - p_); k++) {
+      for (int k = kmin; k < kmax; k++) {
         SCALAR vk = k * grid->hk;
         if (std::holds_alternative<ActionFunc>(func)) {
           std::get<ActionFunc>(func)(vi, vj, vk);
@@ -117,7 +128,8 @@ void test_laplacian_and_gradient(
     std::optional<AnyTestingFunc> test_lap = std::nullopt,
     std::optional<AnyTestingFunc> test_gx = std::nullopt,
     std::optional<AnyTestingFunc> test_gy = std::nullopt,
-    std::optional<AnyTestingFunc> test_gz = std::nullopt) {
+    std::optional<AnyTestingFunc> test_gz = std::nullopt,
+    bool handle_boundary = false) {
   for (uint8_t order = FD_MIN_ORDER; order < FD_MAX_ORDER; order += 2) {
     uint8_t p = order / 2;
     // initialize wf_grid from a given function which either takes the index
@@ -144,9 +156,10 @@ void test_laplacian_and_gradient(
     auto istride = nj * nk;
     // create a function that wraps laplacian_and_gradient function from
     // kernel.h
+    bool consider_boundary = false;
     ActionFuncIndex apply_and_test = [&grid, &lap, &grad, istride, jstride,
-                                      &test_lap, &test_gx, &test_gy,
-                                      &test_gz](int i, int j, int k) {
+                                      &test_lap, &test_gx, &test_gy, &test_gz,
+                                      &consider_boundary](int i, int j, int k) {
       int index = i * istride + j * jstride + k;
       // grid_from_func only initializes one array it does not matter which one
       // we use for wf_grid out all fields( rho12, si12, sj12 and sk12) are
@@ -154,15 +167,23 @@ void test_laplacian_and_gradient(
       // laplacian = rho12, gradient_x = si12, gradient_y = sj12 and finally
       // gradient_z = sk12
       SCALAR is_lap, is_gx, is_gy, is_gz;
-      laplacian_and_gradient(grid.rho12, &grid, i, j, k, false, &lap, &grad,
-                             &is_lap, &is_gx, &is_gy, &is_gz);
+      laplacian_and_gradient(grid.rho12, &grid, i, j, k, consider_boundary,
+                             &lap, &grad, &is_lap, &is_gx, &is_gy, &is_gz);
       call_testing_func(&grid, i, j, k, is_lap, test_lap);
       call_testing_func(&grid, i, j, k, is_gx, test_gx);
       call_testing_func(&grid, i, j, k, is_gy, test_gy);
       call_testing_func(&grid, i, j, k, is_gz, test_gz);
     };
     // apply laplacian and gradient
-    grid_forall_inner(&grid, p, apply_and_test);
+    grid_forall_block(&grid, apply_and_test, make_bounds(p, ni - p),
+                      make_bounds(p, nj - p), make_bounds(p, nk - p));
+    if (handle_boundary) {
+      consider_boundary = handle_boundary;
+      grid_forall_block(&grid, apply_and_test, make_bounds(0, p),
+                        make_bounds(p, nj - p), make_bounds(p, nk - p));
+      grid_forall_block(&grid, apply_and_test, make_bounds(ni-p, nj),
+                        make_bounds(p, nj - p), make_bounds(p, nk - p));
+    }
     std::free(grid.rho12);
   }
 }
@@ -185,6 +206,7 @@ TEST(kernel, laplacian_and_gradient_linear) {
   GeneratingFunc linear_z = [](SCALAR, SCALAR, SCALAR z) -> SCALAR {
     return z;
   };
+
   test_laplacian_and_gradient(linear_x, is_zero, is_one, is_zero, is_zero);
   test_laplacian_and_gradient(linear_y, is_zero, is_zero, is_one, is_zero);
   test_laplacian_and_gradient(linear_z, is_zero, is_zero, is_zero, is_one);
@@ -204,26 +226,37 @@ TEST(kernel, laplacian_and_gradient_quadratic) {
   test_laplacian_and_gradient(linear_xyz, is_two, gx, is_zero, is_zero);
 }
 
-// TEST(kernel, laplacian_and_gradient_triquadratic_) {
-// GeneratingFunc linear_xyz = [](SCALAR x, SCALAR y, SCALAR z) {
-//   return x * x + y * y + z * z + x * y * z;
-// };
-// auto abs_tol = 1e-3;
-// auto is_six = std::make_optional(assert_near(6.0));
-// std::optional<TestingFunc> gx =
-//     std::make_optional([abs_tol](SCALAR x, SCALAR y, SCALAR z, SCALAR actual)
-//     {
-//       ASSERT_NEAR(2.0 * x + y * z, actual, abs_tol);
-//     });
-// std::optional<TestingFunc> gy =
-//     std::make_optional([abs_tol](SCALAR x, SCALAR y, SCALAR z, SCALAR actual)
-//     {
-//       ASSERT_NEAR(2.0 * y + x * z, actual, abs_tol);
-//     });
-// std::optional<TestingFunc> gz =
-//     std::make_optional([abs_tol](SCALAR x, SCALAR y, SCALAR z, SCALAR actual)
-//     {
-//       ASSERT_NEAR(2.0 * z + x * y, actual, abs_tol);
-//     });
-// test_laplacian_and_gradient(linear_xyz, is_six, gx, gx, gz);
-// }
+TEST(kernel, laplacian_and_gradient_triquadratic) {
+  GeneratingFunc linear_xyz = [](SCALAR x, SCALAR y, SCALAR z) {
+    return x * x + y * y + z * z + x * y * z;
+  };
+  auto abs_tol = 1e-3;
+  auto is_six = std::make_optional(assert_near(6.0));
+  std::optional<TestingFunc> gx = std::make_optional(
+      [abs_tol](SCALAR x, SCALAR y, SCALAR z, SCALAR actual) {
+        ASSERT_NEAR(2.0 * x + y * z, actual, abs_tol);
+      });
+  std::optional<TestingFunc> gy = std::make_optional(
+      [abs_tol](SCALAR x, SCALAR y, SCALAR z, SCALAR actual) {
+        ASSERT_NEAR(2.0 * y + x * z, actual, abs_tol);
+      });
+  std::optional<TestingFunc> gz = std::make_optional(
+      [abs_tol](SCALAR x, SCALAR y, SCALAR z, SCALAR actual) {
+        ASSERT_NEAR(2.0 * z + x * y, actual, abs_tol);
+      });
+  test_laplacian_and_gradient(linear_xyz, is_six, gx, gy, gz);
+}
+
+TEST(kernel, laplacian_and_gradient_handle_boundary) {
+  GeneratingFunc linear_xyz = [](SCALAR x, SCALAR y, SCALAR z) {
+    return x * x + y * y + z * z + x * y * z;
+  };
+  auto abs_tol = 1e-3;
+  auto is_six = std::make_optional(assert_near(6.0));
+  // std::optional<TestingFunc> gx = std::make_optional(
+  //     [abs_tol](SCALAR x, SCALAR y, SCALAR z, SCALAR actual) {
+  //       ASSERT_NEAR(2.0 * x + y * z, actual, abs_tol);
+  //     });
+  test_laplacian_and_gradient(linear_xyz, std::nullopt, std::nullopt,
+                              std::nullopt, std::nullopt, true);
+}
