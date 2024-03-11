@@ -3,7 +3,6 @@
 #include "eedft/wf_grid.h"
 #include <assert.h>
 #include <stdbool.h>
-#include <stdio.h>
 
 static inline int handle_boundary_periodic(int i, int ni) {
   assert(ni > 0);
@@ -22,7 +21,6 @@ void laplacian_and_gradient(const SCALAR *restrict f, struct wf_grid *grid,
                             int i, int j, int k, bool handle_boundary,
                             struct fd_stencil *slap, struct fd_stencil *sgrad,
                             SCALAR *lap, SCALAR *fi, SCALAR *fj, SCALAR *fk) {
-  // printf("x=%i, y=%i, z=%i\n", i, j, k);
   int ni = grid->ni, nj = grid->nj, nk = grid->nk;
   int jstride = nk;
   int istride = nj * nk;
@@ -46,15 +44,7 @@ void laplacian_and_gradient(const SCALAR *restrict f, struct wf_grid *grid,
     vgi += (vi - v) * sgrad->coeffs[0][ci];
     vgj += (vj - v) * sgrad->coeffs[1][ci];
     vgk += (vk - v) * sgrad->coeffs[2][ci];
-
-    // if (slap->p *2 == 6) printf("\t(c=%i, off=%i, x=%i, y=%i, z=%i)\t (%.2f, %.2f,%.2f) \tdx=%.2f, "
-    //        "dy=%.2f, dz=%.2f del=%.2f\n",
-    //        ci, off, (i + off), (j + off), (k + off), vi, vj, vk,
-    //        vi * sgrad->coeffs[0][ci], vj * sgrad->coeffs[1][ci],
-    //        vk * sgrad->coeffs[2][ci], vlap);
   }
-  // output the accumulated values
-  // if (slap->p * 2 == 6) printf("dx=%.2f, dy=%.2f, dz=%.2f del=%.2f\n", vgi, vgj, vgk, vlap);
   *lap = vlap;
   *fi = vgi;
   *fj = vgj;
