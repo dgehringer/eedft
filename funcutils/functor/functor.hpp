@@ -6,21 +6,18 @@
 #define FUNCUTILS_FUNCTOR_HPP
 
 #include <functional>
+#include "funcutils/functor/impl/vector.hpp"
+#include "funcutils/functor/impl/optional.hpp"
 
 namespace funcutils::core {
 
-template <template <class...> class F> struct _functor_impl {
-  template <class Function, class A, class B>
-  static constexpr decltype(auto) fmap(Function &&f);
-};
-
+template <template <class...> class F> struct _functor_impl;
 
 template <template <class> class F, class Function, class R, class A>
 constexpr auto _functor_helper(Function &&f, const std::function<R(A)> &) {
   return _functor_impl<F>::template fmap<A, R, Function>(
       std::forward<Function>(f));
 }
-
 
 
 template <template <class> class... F> struct functor;
