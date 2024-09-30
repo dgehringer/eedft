@@ -61,20 +61,9 @@ HPP_TEXT = """
 #define {guard_name}
 
 #include <array>
-#include <type_traits>
+#include "eedft/core/stencil/helpers.hpp"
 
 namespace {namespace} {{
-
-template<class Out> requires std::is_integral_v<Out>
-constexpr Out compute_p(Out m, Out n) {{
-   return (m + 1) / 2 - 1 + n / 2;
-}}
-
-template<class Out> requires std::is_integral_v<Out>
-constexpr Out stencil_size(Out m, Out n) {{
-   return 2 * compute_p(m, n) + 1;
-}}
-
 
 template<class T, std::size_t, std::size_t>
 struct fd {{}};
