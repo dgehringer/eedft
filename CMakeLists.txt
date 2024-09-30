@@ -1,24 +1,18 @@
-cmake_minimum_required(VERSION 3.1)
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+cmake_minimum_required(VERSION 3.29)
 
 project(eedft)
 
-enable_testing()
-add_subdirectory(tests)
+set(CMAKE_CXX_STANDARD 23)
 
-##
-### Source definitions ###
-##
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
 
-set(EEDFT_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
-set(EEDFT_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
+if (BUILD_TESTS)
+    message(STATUS "BUILD_TESTS=${BUILD_TESTS}")
+    add_subdirectory(tests)
+endif ()
 
-include_directories(${EEDFT_INCLUDE_DIR})
 
-add_executable(eedft
-  ${EEDFT_SOURCE_DIR}/stencil.c
-  ${EEDFT_SOURCE_DIR}/kernel.c
-  ${EEDFT_SOURCE_DIR}/main.c
-  )
-target_link_libraries(eedft m)
+add_executable(main
+        "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
+        "include/eedft/stencil/data.hpp"
+)
