@@ -4,15 +4,22 @@ project(eedft)
 
 set(CMAKE_CXX_STANDARD 23)
 
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
+set(EEDFT_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
+set(EEDFT_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+
 
 if (BUILD_TESTS)
     message(STATUS "BUILD_TESTS=${BUILD_TESTS}")
     add_subdirectory(tests)
 endif ()
 
-
+include_directories("${EEDFT_INCLUDE_DIR}")
 add_executable(main
-        "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
-        "include/eedft/stencil/data.hpp"
+        "${EEDFT_SRC_DIR}/main.cpp"
+        "${EEDFT_INCLUDE_DIR}/eedft/core/stencil/data.hpp"
+        "${EEDFT_INCLUDE_DIR}/eedft/core/stencil/helpers.hpp"
+        "${EEDFT_INCLUDE_DIR}/eedft/core/helpers.hpp"
+        "${EEDFT_INCLUDE_DIR}/eedft/core/types.hpp"
 )
+
