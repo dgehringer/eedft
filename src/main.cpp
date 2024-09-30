@@ -1,15 +1,15 @@
+//
+// Created by Dominik Gehringer on 26.09.24.
+//
 
-#include "eedft/stencil.h"
+#include <iostream>
+#include <ostream>
 
+#include "eedft/stencil/data.hpp"
 
 int main() {
-
-  struct fd_stencil stencil;
-  struct wf_grid grid = { .hi = 1.0, .hj = 1.0, .hk = 1.0 };
- 
-  for (uint8_t order = 0; order < 7; order++) {
-    make_gradient(order, &grid, &stencil);
-    //if (order < FD_MIN_ORDER || order > FD_MAX_ORDER) ASSERT_EQ(result, nullptr);  
+  auto val = eedft::stencil::fd<double, 1, 4>::coeffs;
+  for (auto i : val) {
+    std::cout << i << std::endl;
   }
-  return 0;
 }
