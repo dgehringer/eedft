@@ -76,7 +76,7 @@ constexpr Out stencil_size(Out m, Out n) {{
 }}
 
 
-template<class T, std::size_t M, std::size_t N>
+template<class T, std::size_t, std::size_t>
 struct fd {{}};
 
 {specs}
