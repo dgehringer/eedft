@@ -17,9 +17,9 @@ endif ()
 include_directories("${EEDFT_INCLUDE_DIR}")
 add_executable(main
         "${EEDFT_SRC_DIR}/main.cpp"
-        "${EEDFT_INCLUDE_DIR}/eedft/core/stencil/data.hpp"
-        "${EEDFT_INCLUDE_DIR}/eedft/core/stencil/helpers.hpp"
-        "${EEDFT_INCLUDE_DIR}/eedft/core/helpers.hpp"
-        "${EEDFT_INCLUDE_DIR}/eedft/core/types.hpp"
+        "${EEDFT_INCLUDE_DIR}/eedft/core/fd/data.h"
+        "${EEDFT_INCLUDE_DIR}/eedft/core/fd/helpers.h"
+        "${EEDFT_INCLUDE_DIR}/eedft/core/helpers.h"
+        "${EEDFT_INCLUDE_DIR}/eedft/core/types.h"
 )
 

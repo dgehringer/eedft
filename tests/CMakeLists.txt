@@ -1,6 +1,6 @@
 include(FetchContent)
 
-set(EEDFT_INCLUDE_DIR ${PROJECT_SOURCE_DIR})
+set(EEDFT_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include")
 set(EEDFT_TEST_SOURCE_DIR ${PROJECT_SOURCE_DIR}/tests)
 
 # For Windows: Prevent overriding the parent project's compiler/linker settings
@@ -23,12 +23,12 @@ include_directories(${EEDFT_INCLUDE_DIR})
 
 enable_testing()
 
-add_executable(test_functor
+add_executable(test_stencil_utils
         "${EEDFT_TEST_SOURCE_DIR}/main.cpp"
-        "${EEDFT_TEST_SOURCE_DIR}/test_functor.cpp"
-        #"${EEDFT_INCLUDE_DIR}/funcutils/functor/functor.hpp"
+        "${EEDFT_TEST_SOURCE_DIR}/test_stencil_utils.cpp"
+        "${EEDFT_INCLUDE_DIR}/eedft/core/fd/helpers.h"
 )
-target_link_libraries(test_functor gtest gtest_main)
+target_link_libraries(test_stencil_utils gtest gtest_main)
 add_test(NAME test_functor COMMAND test_functor)
 
 
