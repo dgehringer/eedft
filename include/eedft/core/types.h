@@ -14,6 +14,12 @@ namespace eedft::core {
         K = 2
     };
 
+    enum Boundary: std::uint8_t {
+        Lower,
+        Upper,
+        None
+    };
+
     using index_t = int;
 
     template<class T, class Layout = std::layout_right>
