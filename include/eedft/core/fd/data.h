@@ -1,11 +1,12 @@
 
-#ifndef EEDFT_CORE_STENCIL_DATA_HPP
-#define EEDFT_CORE_STENCIL_DATA_HPP
+#ifndef EEDFT_CORE_FD_DATA_H
+#define EEDFT_CORE_FD_DATA_H
 
 #include <array>
-#include "eedft/core/stencil/helpers.hpp"
 
-namespace eedft::core::stencil {
+#include "eedft/core/fd/helpers.h"
+
+namespace eedft::core::fd {
 
 template<class T, std::size_t, std::size_t>
 struct fd {};
@@ -83,5 +84,5 @@ template <class T> struct fd<T, 2, 14> {
 
 }
 
-#endif //EEDFT_CORE_STENCIL_DATA_HPP
+#endif //EEDFT_CORE_FD_DATA_H
 
